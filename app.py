@@ -248,12 +248,45 @@ with st.sidebar:
         value=st.session_state.api_key,
         type="password",
         placeholder="Enter key or leave blank for Curated Mode",
-        help="Get a free key from themoviedb.org. If left empty, app runs in instant Curated Mode with 20+ top Indian & Hollywood hits!"
+        help="Get a free key from themoviedb.org. If left empty, app runs in instant Curated Mode with 50+ top Indian & Hollywood hits!"
     )
     st.session_state.api_key = api_key_input.strip()
 
+    col_save, col_test = st.columns(2)
+    with col_save:
+        if st.button("💾 Save Key", use_container_width=True):
+            if st.session_state.api_key:
+                try:
+                    with open(".env", "w") as f:
+                        f.write(f"TMDB_API_KEY={st.session_state.api_key}\n")
+                    st.success("Saved to .env!")
+                except Exception as e:
+                    st.error(f"Error saving: {e}")
+            else:
+                st.warning("Enter key first")
+    with col_test:
+        if st.button("🧪 Test Key", use_container_width=True):
+            if not st.session_state.api_key:
+                st.info("Curated mode active")
+            else:
+                try:
+                    import requests
+                    r = requests.get(
+                        f"https://api.tmdb.org/3/configuration?api_key={st.session_state.api_key}",
+                        headers={"User-Agent": "Mozilla/5.0"},
+                        timeout=5
+                    )
+                    if r.status_code == 200:
+                        st.success("✅ Connected to TMDB!")
+                    elif r.status_code == 401:
+                        st.error("❌ Key is invalid (401)")
+                    else:
+                        st.warning(f"Response: {r.status_code}")
+                except Exception as ex:
+                    st.error("⚠️ Connection blocked! Turn on Cloudflare WARP or check mobile data.")
+
     if not st.session_state.api_key:
-        st.info("💡 **Curated Catalog Active**: Enjoy instant access to blockbuster movies and shows across Netflix, Prime, Hotstar, and Zee5!")
+        st.info("💡 **Instant Catalog Active**: Over 50+ blockbusters available! Enter a TMDB Key to search live online.")
     else:
         st.success("✅ **Live TMDB API Connected**: Searching over 1,000,000+ movies and TV series!")
 
@@ -329,10 +362,33 @@ main_tab, trending_tab, regional_tab, platform_tab = st.tabs([
 ])
 
 
-def render_movie_grid(movie_list, active_api_key, region_code):
+def render_movie_grid(movie_list, active_api_key, region_code, fallback_search_query=""):
     """Renders a grid of realistic movie cards with provider buttons and detailed drawers."""
     if not movie_list:
-        st.warning("No titles found matching your criteria. Try adjusting your search or filters.")
+        if fallback_search_query:
+            import urllib.parse
+            clean_title = fallback_search_query.strip().title()
+            enc_title = urllib.parse.quote_plus(fallback_search_query.strip())
+            st.info(f"✨ Instant Direct Streaming Launcher for **'{clean_title}'**")
+            st.markdown(f"""
+            <div style="background: rgba(18, 24, 38, 0.9); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; padding: 25px; margin-top: 15px; margin-bottom: 30px;">
+                <h3 style="color: #ffffff; margin-top: 0;">🍿 Stream '{clean_title}' Across Platforms:</h3>
+                <p style="color: #94a3b8; font-size: 14px;">Directly open this movie on your preferred OTT service:</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+                    <a href="https://www.netflix.com/search?q={enc_title}" target="_blank" class="platform-btn btn-netflix" style="padding: 10px 18px; font-size: 13px;">🔴 Open on Netflix</a>
+                    <a href="https://www.primevideo.com/search/ref=atv_nb_sr?phrase={enc_title}" target="_blank" class="platform-btn btn-amazon" style="padding: 10px 18px; font-size: 13px;">🔵 Open on Prime Video</a>
+                    <a href="https://www.hotstar.com/in/explore?search_query={enc_title}" target="_blank" class="platform-btn btn-hotstar" style="padding: 10px 18px; font-size: 13px;">⭐ Open on Disney+ Hotstar</a>
+                    <a href="https://www.zee5.com/search?q={enc_title}" target="_blank" class="platform-btn btn-zee5" style="padding: 10px 18px; font-size: 13px;">🟣 Open on ZEE5</a>
+                    <a href="https://www.jiocinema.com/search/{enc_title}" target="_blank" class="platform-btn btn-jiocinema" style="padding: 10px 18px; font-size: 13px;">🌸 Open on JioCinema</a>
+                    <a href="https://www.sonyliv.com/search/{enc_title}" target="_blank" class="platform-btn btn-sonyliv" style="padding: 10px 18px; font-size: 13px;">🟠 Open on SonyLIV</a>
+                    <a href="https://www.aha.video/search?q={enc_title}" target="_blank" class="platform-btn btn-aha" style="padding: 10px 18px; font-size: 13px;">🟧 Open on Aha</a>
+                    <a href="https://www.youtube.com/results?search_query={enc_title}+full+movie" target="_blank" class="platform-btn btn-youtube" style="padding: 10px 18px; font-size: 13px;">▶️ Open on YouTube</a>
+                    <a href="https://www.justwatch.com/in/search?q={enc_title}" target="_blank" class="platform-btn btn-other" style="padding: 10px 18px; font-size: 13px;">🔗 Check on JustWatch</a>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.warning("No titles found matching your criteria. Try adjusting your search or filters.")
         return
 
     # Render in 4 responsive columns
@@ -472,7 +528,7 @@ with main_tab:
                 language_filter=lang_filter
             )
             st.markdown(f"**Found {len(results)} results for '{search_query}'**")
-            render_movie_grid(results, st.session_state.api_key, selected_region_code)
+            render_movie_grid(results, st.session_state.api_key, selected_region_code, fallback_search_query=search_query)
     else:
         st.markdown('<div class="section-title">🍿 Popular Right Now Across Platforms</div>', unsafe_allow_html=True)
         # Show curated or trending collection by default so page is NEVER blank
